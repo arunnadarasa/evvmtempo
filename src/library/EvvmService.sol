@@ -36,7 +36,7 @@ abstract contract EvvmService is CoreExecution, StakingServiceUtils {
      * @dev Returns core.getEvvmID(). Prevents cross-chain replays.
      * @return Unique EVVM instance identifier
      */
-    function getEvvmID() internal view returns (uint256) {
+    function getEvvmID() public view returns (uint256) {
         return core.getEvvmID();
     }
 
@@ -45,7 +45,7 @@ abstract contract EvvmService is CoreExecution, StakingServiceUtils {
      * @dev Returns core.getPrincipalTokenAddress(). Used for payment operations.
      * @return Address of Principal Token (MATE)
      */
-    function getPrincipalTokenAddress() internal view returns (address) {
+    function getPrincipalTokenAddress() public view returns (address) {
         return core.getPrincipalTokenAddress();
     }
 }
