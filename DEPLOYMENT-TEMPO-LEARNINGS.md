@@ -143,6 +143,7 @@ This is consistent with broader Tempo testnet behavior around how deployment add
 - Prefer **transaction receipts** and **explorer** confirmation for user-visible success until reads are reliable.
 - Optionally maintain **optimistic** balances after known successful operations, or use an **indexer** / **different RPC** if one exposes consistent static calls for your Core address.
 - Re-verify **Core** and other contract addresses against your own `broadcast/…/run-latest.json` and on-chain explorers before relying on static calls.
+- A **Digital Health EVVM** demo UI ships in this repo under **`apps/digital-health-evvm-frontend/`** (see root `README.md`).
 
 ---
 
@@ -174,6 +175,7 @@ This is consistent with broader Tempo testnet behavior around how deployment add
 | `cli/commands/deploy/deploySingle.ts` | Moderato-specific default env for gas + slow |
 | `cli/utils/foundry.ts` | Passes multiplier and `--slow` into Forge |
 | `broadcast/Deploy.s.sol/42431/run-latest.json` | Full deploy receipts (per machine / run) |
+| `apps/digital-health-evvm-frontend/` | Digital Health EVVM demo (Vite + wagmi) |
 
 ---
 

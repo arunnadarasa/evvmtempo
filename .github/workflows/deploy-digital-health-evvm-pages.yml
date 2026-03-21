@@ -1,0 +1,53 @@
+# Build apps/digital-health-evvm-frontend and deploy to GitHub Pages.
+# Enable: Settings → Pages → Source: GitHub Actions.
+# Set VITE_BASE_PATH to /{repo-name}/ for project pages (this repo: /evvmtempo/).
+name: Deploy Digital Health EVVM to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/digital-health-evvm-frontend/**"
+      - ".github/workflows/deploy-digital-health-evvm-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-digital-health-evvm
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/digital-health-evvm-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/digital-health-evvm-frontend/package-lock.json
+
+      - name: Install and build
+        run: npm ci && npm run build
+        env:
+          VITE_BASE_PATH: /evvmtempo/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/digital-health-evvm-frontend/dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

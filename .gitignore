@@ -12,8 +12,8 @@ out/
 # node_modules
 node_modules/
 
-# Docs
-docs/
+# Docs (repository root only; nested apps may ship their own docs/)
+/docs/
 
 # Dotenv file
 .env
