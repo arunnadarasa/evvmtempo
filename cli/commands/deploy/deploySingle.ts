@@ -95,12 +95,30 @@ export async function deploySingle(args: string[], options: any) {
       `${colors.darkGray}Skipping host chain verification for local development${colors.reset}`
     );
   } else {
-    if (!(await isChainIdRegistered(chainId))) chainIdNotSupported(chainId);
+    const skipChainRegistryCheck =
+      process.env.EVVM_SKIP_CHAIN_REGISTRY_CHECK === "1";
+    if (skipChainRegistryCheck) {
+      warning(
+        `Chain registry whitelist check skipped (EVVM_SKIP_CHAIN_REGISTRY_CHECK=1)`,
+        `${colors.darkGray}Deploying to chain ID ${chainId} without verifying isChainIdRegistered on Ethereum Sepolia.${colors.reset}`
+      );
+    } else if (!(await isChainIdRegistered(chainId))) {
+      chainIdNotSupported(chainId);
+    }
 
-    verificationflag = await explorerVerification();
+    const skipExplorerVerify = process.env.EVVM_SKIP_EXPLORER_VERIFY === "1";
+    if (skipExplorerVerify) {
+      verificationflag = "";
+      warning(
+        `Block explorer verification skipped (EVVM_SKIP_EXPLORER_VERIFY=1)`,
+        `${colors.darkGray}Forge will deploy without --verify.${colors.reset}`
+      );
+    } else {
+      verificationflag = await explorerVerification();
 
-    if (verificationflag === undefined)
-      criticalError(`Explorer verification setup failed.`);
+      if (verificationflag === undefined)
+        criticalError(`Explorer verification setup failed.`);
+    }
   }
 
   infoWithChainData(
@@ -108,6 +126,19 @@ export async function deploySingle(args: string[], options: any) {
     ChainData[chainId]?.Chain || "",
     chainId
   );
+
+  // Tempo Moderato (42431) uses much higher intrinsic gas for contract creation than
+  // Ethereum; Foundry's default ~1.3x estimate can produce txs the RPC rejects with
+  // "intrinsic gas too low" unless we raise the multiplier.
+  if (chainId === 42431 && !process.env.EVVM_GAS_ESTIMATE_MULTIPLIER) {
+    process.env.EVVM_GAS_ESTIMATE_MULTIPLIER = "400";
+  }
+
+  // Serialize broadcasts (wait for each tx before the next). Reduces nonce / replacement
+  // errors on Tempo when RPC or batching gets out of sync with chain state.
+  if (chainId === 42431 && process.env.EVVM_BROADCAST_SLOW !== "0") {
+    process.env.EVVM_BROADCAST_SLOW = "1";
+  }
 
   await forgeScript(
     "script/Deploy.s.sol:DeployScript",
@@ -141,15 +172,22 @@ Or if you want to use your custom Ethereum Sepolia RPC:
    ${colors.blue}https://www.evvm.info/docs/QuickStart#6-register-in-registry-evvm${colors.reset}
 `);
 
+  if (process.env.EVVM_SKIP_REGISTRY_REGISTRATION === "1") {
+    warning(
+      `EVVM Registry registration skipped (EVVM_SKIP_REGISTRY_REGISTRATION=1)`,
+      `${colors.darkGray}Core is deployed at ${coreAddress}. Register later when supported.${colors.reset}`
+    );
+    confirmation(`Deployment finished (registry step skipped).`);
+    return;
+  }
+
   if (
     !(await promptYesNo(
       `${colors.yellow}Do you want to register the EVVM instance now? (y/n):${colors.reset}`
     ))
   ) {
-    customErrorWithExit(
-      `Steps skipped by user choice`,
-      `${colors.darkGray}You can complete setup later using the commands above.${colors.reset}`
-    );
+    confirmation(`Registration skipped. Deployed Core remains at ${coreAddress}.`);
+    return;
   }
 
   // If user decides, add --useCustomEthRpc flag to the registerEvvm call

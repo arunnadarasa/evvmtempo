@@ -397,6 +397,18 @@ export async function forgeScript(
       command.push("--evm-version", evmVersion);
     }
 
+    const gasMult = process.env.EVVM_GAS_ESTIMATE_MULTIPLIER;
+    if (gasMult) {
+      command.push("--gas-estimate-multiplier", gasMult);
+    }
+
+    const blockGasLimit = process.env.EVVM_BLOCK_GAS_LIMIT ?? "30000000";
+    command.push("--block-gas-limit", blockGasLimit);
+
+    if (process.env.EVVM_BROADCAST_SLOW === "1") {
+      command.push("--slow");
+    }
+
     await $`forge clean`.quiet();
 
     await $`${command}`;

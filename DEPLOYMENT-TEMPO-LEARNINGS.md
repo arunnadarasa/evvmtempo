@@ -1,0 +1,165 @@
+# EVVM on Tempo (Moderato): Full Deployment Learnings
+
+This document records what we learned deploying an EVVM-style stack on **Tempo Moderato** (chain ID **42431**, RPC `https://rpc.moderato.tempo.xyz`): what worked, what failed, how we fixed it, and how to operate safely next time.
+
+---
+
+## 1. What we were trying to build
+
+An **EVVM instance** on a host chain is a coordinated set of contracts. In this repository, the canonical single-chain deploy (`script/Deploy.s.sol`) deploys **six** contracts in one broadcast session (order matters for wiring):
+
+| Order | Contract    | Role (short)                                      |
+|------|-------------|---------------------------------------------------|
+| 1     | `Staking`   | Staking layer; wired later to Estimator + Core   |
+| 2     | `Core`      | Core EVVM logic (often referred to as “Evvm”)    |
+| 3     | `Estimator` | Staking-related estimator                        |
+| 4     | `NameService` | Name service tied to Core                       |
+| —     | (calls)     | `staking.initializeSystemContracts(estimator, core)` |
+| 5     | `Treasury`  | Treasury for Core                                 |
+| —     | (calls)     | `core.initializeSystemContracts(nameService, treasury)` |
+| 6     | `P2PSwap`   | P2P swap (large contract; last to deploy)         |
+
+**Intentionally skipped** (per project constraints):
+
+- **EVVM registry** on Ethereum Sepolia — not used for this testnet until supported.
+- **Block explorer contract verification** — skipped for Tempo where unsupported or out of scope.
+
+---
+
+## 2. Network facts that drive most of the pain (Tempo / TIP-1000)
+
+- **Gas is paid in a USD stable Path-style token** (not a “native ETH” mental model). PathUSD-style token used for fees is documented in project env examples (e.g. `0x20c0…0000`, 6 decimals).
+- **State creation is expensive** on Tempo relative to mainnet-style assumptions: contract-creation cost per byte is much higher than Ethereum’s ~200 gas/byte (documentation cites ~1000 gas/byte-class behavior).
+- **Per-transaction gas cap** is on the order of **30M gas** — large deployments must fit under that per tx.
+- **Foundry’s default gas estimate multiplier (~130%) is often wrong here** for big `CREATE` transactions: you see errors like **“intrinsic gas too low”** when the signed tx carries too little gas.
+
+These facts are why we bumped multipliers, block gas limits, and slow broadcast.
+
+---
+
+## 3. Successes
+
+### 3.1 Full stack deploy via `Deploy.s.sol`
+
+A complete run of `forge script script/Deploy.s.sol:DeployScript … --broadcast` produced on-chain deployments for **Staking, Core, Estimator, NameService, Treasury, and P2PSwap**, with addresses recorded under:
+
+`broadcast/Deploy.s.sol/42431/run-latest.json`
+
+Example addresses from that artifact (verify on-chain before treating as canonical for production):
+
+- Staking: `0xd75d635b61925574e4d43f82daffd002a37b3197`
+- Core: `0xd43072d851e15cd96d54374b95f2c5ea91ff959c`
+- Estimator: `0x0c941b85519d95552cccf1a2f1d0bd6905093733`
+- NameService: `0xcd2d3b3cb5cc5997dbdc8677418d97d70bddeee0`
+- Treasury: `0x5dd43e0543939bc4987e066dee73dda77a8e0b5f`
+- P2PSwap: `0x0979328cb08ae6ba375b8f31c9dd6d23db041eb0`
+
+Always re-read your **own** `run-latest.json` if you redeploy.
+
+### 3.2 CLI defaults for Moderato (chain 42431)
+
+To reduce foot-guns, the EVVM CLI deployment path was adjusted so that on **42431**:
+
+- If `EVVM_GAS_ESTIMATE_MULTIPLIER` is unset, it defaults to **400** (users often need **800–1000** for the largest creates).
+- `EVVM_BROADCAST_SLOW` defaults to **1** so Forge uses **`--slow`** unless explicitly disabled — helps with nonce ordering on congested or quirky RPCs.
+
+See: `cli/commands/deploy/deploySingle.ts`, `cli/utils/foundry.ts`.
+
+### 3.3 Two-phase recovery: deploy only `P2PSwap`
+
+When the **last** contract in the full script failed (historically `P2PSwap` due to size/gas), we added:
+
+- `script/DeployP2PSwapOnly.s.sol` — deploys **only** `P2PSwap` with constructor args from env vars.
+- `scripts/print-p2pswap-env.sh` — extracts Core + Staking addresses from a Foundry broadcast JSON and prints `export` lines for `eval`.
+
+This avoids redeploying the entire stack when Core + Staking already exist.
+
+### 3.4 Documentation in `.env.example`
+
+Environment patterns were documented: RPC URL, skip flags, gas multiplier, block gas limit, slow broadcast, clearing stale `broadcast/` / `cache/`, and paste-safe `export` syntax for zsh (avoid comments on the same line as `export`).
+
+---
+
+## 4. Failures, symptoms, and fixes
+
+### 4.1 `intrinsic gas too low`
+
+- **Symptom:** Forge or RPC rejects the tx before/without meaningful execution.
+- **Cause:** Gas limit attached to the transaction too low vs Tempo’s high intrinsic / creation costs.
+- **Fix:** Raise `EVVM_GAS_ESTIMATE_MULTIPLIER` (often **800**, sometimes **1000**). Use `--block-gas-limit 30000000` in line with the network cap. Retry after a clean simulation.
+
+### 4.2 `nonce too low` / `replacement transaction underpriced`
+
+- **Symptom:** Later txs in a multi-tx script fail; nonces out of sync.
+- **Cause:** Stale **Foundry broadcast** or **cache** state locally, or RPC returning inconsistent pending nonces when sending bursts.
+- **Fix:** Enable **`--slow`** (via `EVVM_BROADCAST_SLOW=1`). If still broken, remove chain-specific artifacts, e.g.  
+  `rm -rf broadcast/Deploy.s.sol/42431 cache/Deploy.s.sol/42431`  
+  then redeploy **carefully** (understand this deletes local broadcast history for that script/chain).
+
+### 4.3 Generic `Transaction Failure` on a large `CREATE` (e.g. P2PSwap)
+
+- **Symptom:** On-chain revert or failure at the last deployment step.
+- **Likely contributors:** Still-too-low gas after estimate, insufficient fee token balance, or hitting per-tx gas limits.
+- **Mitigations:** Higher multiplier, ensure enough PathUSD (or whatever pays gas), `--slow`, and if needed **split** deployment using `DeployP2PSwapOnly.s.sol`.
+
+### 4.4 Shell / env mistakes
+
+| Mistake | What goes wrong | Fix |
+|--------|------------------|-----|
+| `export FOO=800 # or 1000` copied literally | zsh may parse `or` / `1000` as bad `export` syntax | One variable per line; separate comment lines |
+| Placeholder addresses in `.env` | `vm.envAddress` / script parsing fails | Use full **42-character** `0x` + 40 hex digits |
+| Printing helper output without `eval` | Variables not set in current shell | `eval "$(./scripts/print-p2pswap-env.sh)"` |
+
+### 4.5 Stricter address parsing in `DeployP2PSwapOnly`
+
+`DeployP2PSwapOnly.s.sol` uses explicit validation so opaque Forge errors become actionable (length, `0x` prefix, no placeholder strings).
+
+### 4.6 Foundry JSON vs reality (P2PSwap-only run)
+
+In at least one `DeployP2PSwapOnly` broadcast, metadata showed a **`contractAddress` that matched the Staking address passed as a constructor argument** — which would be impossible if Staking already held code at that address (a second `CREATE` cannot occupy the same address). **Treat console logs and on-chain checks as ground truth:** `cast code <address>`, receipt from a block explorer, or the **full** `Deploy.s.sol` artifact where P2PSwap has its own distinct address.
+
+**Practical rule:** Prefer the **full deploy** `run-latest.json` for the six-contract instance; double-check any standalone P2PSwap tx against chain state.
+
+---
+
+## 5. Operational checklist (Moderato)
+
+1. **Fund** the deployer with enough **fee token** (PathUSD-style) for many large txs.
+2. **Set** `RPC_URL=https://rpc.moderato.tempo.xyz` (or your provider).
+3. **Set** `EVVM_GAS_ESTIMATE_MULTIPLIER` to **800** (or **1000** if needed).
+4. **Set** `EVVM_BLOCK_GAS_LIMIT=30000000` if your tooling respects it.
+5. **Enable slow broadcast** (`EVVM_BROADCAST_SLOW=1` or CLI default on 42431).
+6. **Full deploy:**  
+   `forge script script/Deploy.s.sol:DeployScript --via-ir --optimize true --rpc-url "$RPC_URL" --account <name> --broadcast -vvvv`  
+   plus gas / block limit / slow flags as documented in `.env.example`.
+7. **If** only P2PSwap is missing:  
+   `eval "$(./scripts/print-p2pswap-env.sh)"` then run `DeployP2PSwapOnly` with the same Forge flags.
+8. **Do not** register on the Sepolia EVVM registry for this network until supported.
+9. **Archive** addresses from `run-latest.json` for your app / ops.
+
+---
+
+## 6. Key files reference
+
+| File | Purpose |
+|------|---------|
+| `script/Deploy.s.sol` | Full six-contract deployment |
+| `script/DeployP2PSwapOnly.s.sol` | P2PSwap-only follow-up |
+| `scripts/print-p2pswap-env.sh` | Env exports for P2PSwap-only from broadcast JSON |
+| `.env.example` | RPC, gas, slow mode, cache clearing, examples |
+| `cli/commands/deploy/deploySingle.ts` | Moderato-specific default env for gas + slow |
+| `cli/utils/foundry.ts` | Passes multiplier and `--slow` into Forge |
+| `broadcast/Deploy.s.sol/42431/run-latest.json` | Full deploy receipts (per machine / run) |
+
+---
+
+## 7. References (external)
+
+- EVVM concepts and CLI: [evvm.info LLM-oriented docs](https://www.evvm.info/llms-full.txt)
+- Tempo architecture, fees, gas, TIP-1000: [docs.tempo.xyz LLM-oriented docs](https://docs.tempo.xyz/llms-full.txt)
+
+---
+
+## 8. Summary
+
+Deploying EVVM on **Tempo Moderato** is workable but **not** “Ethereum defaults”: **gas estimation, serialization of txs, and clearing stale Forge state** matter as much as Solidity. We **succeeded** in getting a **full six-contract** instance recorded in Foundry artifacts and added **recovery tooling** for the heaviest contract. The main **failures** were **under-gassed txs**, **nonce/broadcast drift**, and **shell/env hygiene** — all addressable with the checklist above and the scripts in this repo.
