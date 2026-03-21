@@ -17,7 +17,7 @@ Two ways to use EVVM:
 1. As a library - Import Solidity contracts in your dApp
 2. As a CLI tool - Deploy and manage EVVM instances on testnets
 
-A **Digital Health EVVM** demo web app (Vite + React + wagmi) for **Tempo Moderato** and **Base Sepolia** lives under [`apps/digital-health-evvm-frontend`](apps/digital-health-evvm-frontend/). See [apps/digital-health-evvm-frontend/README.md](apps/digital-health-evvm-frontend/README.md) and [DEPLOYMENT-TEMPO-LEARNINGS.md](DEPLOYMENT-TEMPO-LEARNINGS.md) for Tempo deployment and RPC notes.
+A **Digital Health EVVM** demo web app (Vite + React + wagmi) for **Tempo Moderato** lives under [`apps/digital-health-evvm-frontend`](apps/digital-health-evvm-frontend/). See [apps/digital-health-evvm-frontend/README.md](apps/digital-health-evvm-frontend/README.md) and [DEPLOYMENT-TEMPO-LEARNINGS.md](DEPLOYMENT-TEMPO-LEARNINGS.md) for deployment and RPC notes.
 
 Docs & hosted library: https://www.evvm.info/
 
@@ -49,7 +49,7 @@ Guide: How to build on top of EVVM: https://www.evvm.info/docs/HowToMakeAEVVMSer
 
 ```bash
 cd apps/digital-health-evvm-frontend
-cp .env.example .env   # optional: VITE_TARGET_NETWORK=tempo-moderato or base-sepolia, etc.
+cp .env.example .env   # optional overrides — see apps/digital-health-evvm-frontend/.env.example
 npm install
 npm run dev
 ```
