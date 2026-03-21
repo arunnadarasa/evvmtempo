@@ -6,7 +6,7 @@ This Vite app lives in the **[evvmtempo](https://github.com/arunnadarasa/evvmtem
 
 ---
 
-An OpenClaw framework for clinical agentic engineering. This app targets **Tempo Moderato** (chain **42431**) and the **MATE** principal token. See `src/config/contracts.ts` and `.env.example` for options.
+An OpenClaw framework for clinical agentic engineering. This app targets **Tempo Moderato** (chain **42431**) and the **MATE** principal token. Contract addresses are in `src/config/contracts.ts`.
 
 ## Disclaimer
 

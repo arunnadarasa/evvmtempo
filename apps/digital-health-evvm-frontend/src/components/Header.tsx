@@ -2,28 +2,17 @@ import { useState, useEffect } from "react";
 import { useAccount, useBalance, useChainId, useSwitchChain, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { formatUnits } from "viem";
-import { baseSepolia, tempoModerato } from "viem/chains";
+import { tempoModerato } from "viem/chains";
 import { CHAIN_ID, NETWORK_DISPLAY_NAME } from "../config/contracts";
 import { TEMPO_MODERATO_FEE_TOKENS, TEMPO_MODERATO_FEE_DECIMALS } from "../config/tempoStablecoins";
 
-type ChainUi = { name: string; explorer: string; faucet: string; nativeDecimals: number; nativeLabel: string };
-
-const CHAIN_CONFIG: Record<number, ChainUi> = {
-  [baseSepolia.id]: {
-    name: "Base Sepolia",
-    explorer: "https://sepolia.basescan.org",
-    faucet: "https://www.coinbase.com/faucets/base-ethereum-goerli-faucet",
-    nativeDecimals: 18,
-    nativeLabel: "ETH",
-  },
-  [tempoModerato.id]: {
-    name: "Tempo Moderato",
-    explorer: "https://explore.moderato.tempo.xyz",
-    faucet: "https://docs.tempo.xyz",
-    nativeDecimals: 6,
-    nativeLabel: "USD",
-  },
-};
+const CHAIN_UI = {
+  name: "Tempo Moderato",
+  explorer: "https://explore.moderato.tempo.xyz",
+  faucet: "https://docs.tempo.xyz",
+  nativeDecimals: 6,
+  nativeLabel: "USD",
+} as const;
 
 export function Header() {
   const { address, isConnected } = useAccount();
@@ -39,8 +28,6 @@ export function Header() {
     if (!isConnected || chainId === undefined || chainId === CHAIN_ID) return;
     switchChainAsync({ chainId: CHAIN_ID }).catch(() => {});
   }, [isConnected, chainId, switchChainAsync]);
-
-  const chainConfig = CHAIN_CONFIG[chainId] ?? CHAIN_CONFIG[CHAIN_ID];
 
   const copyAddress = async () => {
     if (!address) return;
@@ -59,9 +46,9 @@ export function Header() {
   };
 
   const nativeDisplay =
-    ethBalance?.value !== undefined && chainConfig
-      ? `${parseFloat(formatUnits(ethBalance.value, chainConfig.nativeDecimals)).toFixed(4)} ${chainConfig.nativeLabel}`
-      : `— ${chainConfig?.nativeLabel ?? "—"}`;
+    ethBalance?.value !== undefined
+      ? `${parseFloat(formatUnits(ethBalance.value, CHAIN_UI.nativeDecimals)).toFixed(4)} ${CHAIN_UI.nativeLabel}`
+      : `— ${CHAIN_UI.nativeLabel}`;
 
   return (
     <header className="header">
@@ -83,21 +70,17 @@ export function Header() {
               )}
               {chainId === CHAIN_ID && (
                 <span className="btn btn-chain" style={{ cursor: "default" }}>
-                  {chainConfig.name}
+                  {CHAIN_UI.name}
                 </span>
               )}
               <div className="wallet-balance-row">
                 <span
                   className="eth-balance"
-                  title={
-                    chainId === tempoModerato.id
-                      ? `Wallet-reported balance for the active fee token (${TEMPO_MODERATO_FEE_DECIMALS} decimals)`
-                      : `Native balance on ${chainConfig.name}`
-                  }
+                  title={`Wallet-reported balance for the active fee token (${TEMPO_MODERATO_FEE_DECIMALS} decimals)`}
                 >
                   {nativeDisplay}
                 </span>
-                <a href={chainConfig.faucet} target="_blank" rel="noopener noreferrer" className="faucet-link" title="Faucet / docs">
+                <a href={CHAIN_UI.faucet} target="_blank" rel="noopener noreferrer" className="faucet-link" title="Faucet / docs">
                   Faucet
                 </a>
               </div>
@@ -108,7 +91,7 @@ export function Header() {
                 </p>
               )}
               <a
-                href={`${chainConfig.explorer}/address/${address}`}
+                href={`${CHAIN_UI.explorer}/address/${address}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="wallet-addr wallet-link"

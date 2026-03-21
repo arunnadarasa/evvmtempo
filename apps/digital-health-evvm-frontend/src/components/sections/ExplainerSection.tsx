@@ -1,4 +1,3 @@
-import { TARGET_NETWORK } from "../../config/contracts";
 import { TEMPO_MODERATO_FEE_TOKENS } from "../../config/tempoStablecoins";
 
 export function ExplainerSection() {
@@ -6,70 +5,47 @@ export function ExplainerSection() {
     <section className="section">
       <h2>How the payments work</h2>
       <p>
-        Most participants in the OpenClaw Clinical Hackathon are not blockchain engineers. This section explains the two
-        payment rails in simple language so you can focus on building useful Clinical Agents.
+        This section explains EVVM payments on <strong>Tempo Moderato</strong> in simple language so you can focus on
+        building Clinical Agents without deep blockchain expertise.
       </p>
-      {TARGET_NETWORK === "tempo-moderato" && (
-        <div className="tempo-fee-callout">
-          <h3>Tempo Moderato: fee stablecoins (not ETH)</h3>
-          <p>
-            On chain <strong>42431</strong>, transaction fees are paid in USD stablecoins (<strong>6 decimals</strong>),
-            not native ETH. The testnet commonly uses four fee tokens; the public faucet often tops up all of them:
-          </p>
-          <table className="tempo-fee-table">
-            <thead>
-              <tr>
-                <th>Token</th>
-                <th>Address</th>
+      <div className="tempo-fee-callout">
+        <h3>Tempo Moderato: fee stablecoins (not ETH)</h3>
+        <p>
+          On chain <strong>42431</strong>, transaction fees are paid in USD stablecoins (<strong>6 decimals</strong>),
+          not native ETH. The testnet commonly uses four fee tokens; the public faucet often tops up all of them:
+        </p>
+        <table className="tempo-fee-table">
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Address</th>
+            </tr>
+          </thead>
+          <tbody>
+            {TEMPO_MODERATO_FEE_TOKENS.map((t) => (
+              <tr key={t.address}>
+                <td>{t.name}</td>
+                <td>
+                  <code className="mono-addr">{t.address}</code>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {TEMPO_MODERATO_FEE_TOKENS.map((t) => (
-                <tr key={t.address}>
-                  <td>{t.name}</td>
-                  <td>
-                    <code className="mono-addr">{t.address}</code>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="small">
-            PathUSD matches <code>viem/tempo</code> <code>Addresses.pathUsd</code>. See{" "}
-            <a href="https://docs.tempo.xyz" target="_blank" rel="noopener noreferrer">
-              docs.tempo.xyz
-            </a>{" "}
-            for faucets and network details.
-          </p>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+        <p className="small">
+          PathUSD matches <code>viem/tempo</code> <code>Addresses.pathUsd</code>. See{" "}
+          <a href="https://docs.tempo.xyz" target="_blank" rel="noopener noreferrer">
+            docs.tempo.xyz
+          </a>{" "}
+          for faucets and network details.
+        </p>
+      </div>
       <div className="grid-2">
         <div>
-          <h3>1. Paying with USDC via MPP-style HTTP (Echo)</h3>
+          <h3>1. Paying with MATE via EVVM Core</h3>
           <p>
-            Imagine a website that says, &quot;to see this MRI report, please pay a small fee&quot;. The server replies
-            with HTTP <strong>402 Payment Required</strong> and payment instructions (the same pattern used for{" "}
-            <strong>MPP</strong> — Machine Payments Protocol — on Tempo; see{" "}
-            <a href="https://mpp.dev" target="_blank" rel="noopener noreferrer">
-              mpp.dev
-            </a>
-            ).
-          </p>
-          <p>
-            An Agent (or your browser) reads that response, prepares a USDC payment (EIP‑3009{" "}
-            <code>transferWithAuthorization</code>), asks your wallet to sign, and re-sends the request with proof. Once
-            the server accepts payment, it returns the content.
-          </p>
-          <p>
-            In this template, that flow uses USDC on Base Sepolia and the Echo demo endpoint — stablecoin lives outside
-            EVVM and uses normal EVM tooling.
-          </p>
-        </div>
-        <div>
-          <h3>2. Paying with DHM via EVVM Core (MPP-aligned paywall)</h3>
-          <p>
-            Digital Health MATE (DHM) lives inside EVVM Core. For paywalled APIs, your backend can return 402 and an EVVM
-            payment option; the client signs an EVVM <code>pay()</code> message instead of EIP‑3009.
+            The principal token (<strong>MATE</strong>) is tracked inside EVVM Core. You can use the in-app faucet, sign{" "}
+            <code>pay()</code> messages for transfers, and rely on sync/async nonces so each payment is only used once.
           </p>
           <ul>
             <li>
@@ -81,10 +57,17 @@ export function ExplainerSection() {
               small fee.
             </li>
           </ul>
+        </div>
+        <div>
+          <h3>2. HTTP paywalls on Tempo (reference)</h3>
           <p>
-            On <strong>Tempo</strong>, the same pay-for-HTTP story often uses the <code>mppx</code> client and wallet
-            bundles (see the DanceTempo reference app). Here on Base Sepolia we keep the EVVM signature path so the
-            hackathon template stays wallet-light.
+            For “pay before content” over HTTP, Tempo ecosystems often use <strong>MPP</strong>-style flows and tools
+            such as <code>mppx</code>; see{" "}
+            <a href="https://mpp.dev" target="_blank" rel="noopener noreferrer">
+              mpp.dev
+            </a>{" "}
+            and the DanceTempo reference app for wallet bundles and discovery. This demo focuses on EVVM Core and
+            on-chain MATE; wire HTTP paywalls separately if your agent needs them.
           </p>
         </div>
       </div>
@@ -92,22 +75,18 @@ export function ExplainerSection() {
         <h3>How to think about this as a builder</h3>
         <ul>
           <li>
-            <strong>Lovable / no‑code developers</strong>: treat the MPP backend like a smart paywall — handle &quot;I
-            got a 402, let my Agent pay, then show the result&quot;.
+            <strong>Lovable / no‑code developers</strong>: treat EVVM like a ledger for agent micropayments — fund MATE
+            via the faucet, then automate signed <code>pay()</code> flows.
           </li>
           <li>
-            <strong>OpenClaw Agents</strong>: plan the payment, request a wallet signature, and call the API again with
-            proof of payment.
+            <strong>OpenClaw Agents</strong>: plan the payment, request a wallet signature, and submit or relay the
+            transaction.
           </li>
           <li>
-            <strong>Clinical teams</strong>: think in terms of &quot;MRI Agent&quot; or &quot;Equipment Agent&quot; that
-            receives tiny DHM payments for access or scheduling — without learning Solidity.
+            <strong>Clinical teams</strong>: think in terms of agents that receive tiny MATE payments for access or
+            scheduling — without learning Solidity.
           </li>
         </ul>
-        <p>
-          Two rails: <strong>USDC + HTTP payment</strong> (Echo demo), and <strong>DHM + EVVM</strong> — mix them in
-          agent workflows depending on who pays.
-        </p>
       </div>
     </section>
   );
