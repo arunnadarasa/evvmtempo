@@ -28,7 +28,14 @@ An **EVVM instance** on a host chain is a coordinated set of contracts. In this 
 
 ## 2. Network facts that drive most of the pain (Tempo / TIP-1000)
 
-- **Gas is paid in a USD stable Path-style token** (not a “native ETH” mental model). PathUSD-style token used for fees is documented in project env examples (e.g. `0x20c0…0000`, 6 decimals).
+- **Gas is paid in USD stablecoins** (not a “native ETH” mental model). On **Tempo Moderato testnet (42431)** the usual fee tokens are **PathUSD**, **AlphaUSD**, **BetaUSD**, and **ThetaUSD** (all **6 decimals**). Addresses (check `viem/tempo` for PathUSD — `Addresses.pathUsd`):
+  - **PathUSD** — `0x20c0000000000000000000000000000000000000`
+  - **AlphaUSD** — `0x20c0000000000000000000000000000000000001`
+  - **BetaUSD** — `0x20c0000000000000000000000000000000000002`
+  - **ThetaUSD** — `0x20c0000000000000000000000000000000000003`  
+  The public testnet **faucet often funds all four** so you can pay fees with whichever token your wallet selects.
+
+  **Note:** In `input/BaseInputs.sol`, `principalTokenAddress` is a **placeholder** (`0x000…0001`). For a production-aligned principal token on Moderato, set it to a real TIP-20 address (e.g. **AlphaUSD** at `0x20c0000000000000000000000000000000000001`) if your economics should track that stablecoin.
 - **State creation is expensive** on Tempo relative to mainnet-style assumptions: contract-creation cost per byte is much higher than Ethereum’s ~200 gas/byte (documentation cites ~1000 gas/byte-class behavior).
 - **Per-transaction gas cap** is on the order of **30M gas** — large deployments must fit under that per tx.
 - **Foundry’s default gas estimate multiplier (~130%) is often wrong here** for big `CREATE` transactions: you see errors like **“intrinsic gas too low”** when the signed tx carries too little gas.
@@ -119,6 +126,23 @@ Environment patterns were documented: RPC URL, skip flags, gas multiplier, block
 In at least one `DeployP2PSwapOnly` broadcast, metadata showed a **`contractAddress` that matched the Staking address passed as a constructor argument** — which would be impossible if Staking already held code at that address (a second `CREATE` cannot occupy the same address). **Treat console logs and on-chain checks as ground truth:** `cast code <address>`, receipt from a block explorer, or the **full** `Deploy.s.sol` artifact where P2PSwap has its own distinct address.
 
 **Practical rule:** Prefer the **full deploy** `run-latest.json` for the six-contract instance; double-check any standalone P2PSwap tx against chain state.
+
+### 4.7 Public RPC: `eth_call` / `eth_getCode` vs successful txs to Core (dapps)
+
+On **Tempo Moderato**, the public RPC (`https://rpc.moderato.tempo.xyz`) may return **empty `eth_getCode`** and **empty `eth_call` return data** for a deployed **Core** address, while **transactions** to the same address (for example `addBalance`) **succeed** and appear correctly on the explorer.
+
+**Symptoms for frontends / tooling:**
+
+- `eth_call` for view functions such as `getBalance`, `getNextCurrentSyncNonce`, or `getEvvmMetadata` can yield **no return data**, so libraries like viem/wagmi report **no data** for `readContract` (UI shows missing balance or nonce).
+- Writes still **confirm** on-chain.
+
+This is consistent with broader Tempo testnet behavior around how deployment addresses and RPC surfacing interact; see discussion in the Tempo project (for example [tempoxyz/tempo#1550](https://github.com/tempoxyz/tempo/issues/1550) on contract address handling affecting reads).
+
+**Mitigations for apps:**
+
+- Prefer **transaction receipts** and **explorer** confirmation for user-visible success until reads are reliable.
+- Optionally maintain **optimistic** balances after known successful operations, or use an **indexer** / **different RPC** if one exposes consistent static calls for your Core address.
+- Re-verify **Core** and other contract addresses against your own `broadcast/…/run-latest.json` and on-chain explorers before relying on static calls.
 
 ---
 
