@@ -1,6 +1,6 @@
 /**
  * Tempo Moderato (42431) — EVVM Tempo testnet.
- * Matches `input/BaseInputs.sol` EvvmMetadata + `script/Deploy.s.sol` broadcast (chain 42431).
+ * Matches `input/BaseInputs.sol` + `broadcast/Deploy.s.sol/42431/run-latest.json`.
  */
 export const CHAIN_ID = 42431 as const;
 
@@ -10,17 +10,18 @@ export const EVVM_ID = 0n;
 /** Principal token key in Core `balances` mapping (placeholder address in metadata). */
 export const DHM_TOKEN = "0x0000000000000000000000000000000000000001" as `0x${string}`;
 
+/** From `broadcast/Deploy.s.sol/42431/run-latest.json` (latest full deploy). */
 export const ADDRESSES = {
-  evvm: "0xd43072d851e15cd96d54374b95f2c5ea91ff959c",
-  staking: "0xd75d635b61925574e4d43f82daffd002a37b3197",
-  nameService: "0xcd2d3b3cb5cc5997dbdc8677418d97d70bddeee0",
-  treasury: "0x5dd43e0543939bc4987e066dee73dda77a8e0b5f",
-  estimator: "0x0c941b85519d95552cccf1a2f1d0bd6905093733",
-  p2pSwap: "0x0979328cb08ae6ba375b8f31c9dd6d23db041eb0",
+  evvm: "0x7b1bc28d5e07ac5c88fc31d19f86eb96e7e994e9",
+  staking: "0xcbac92c9c1bdaf352b8462653717732679ec9691",
+  nameService: "0x2c9bace7007efd0b925e0a570c80ea7e4c430fc3",
+  treasury: "0xf03d8d9ace57e0cccc9a4fc8b98f90118ff18e5c",
+  estimator: "0x4798ff704b12587311998c1da2bc80fa34126b3b",
+  p2pSwap: "0xe1ff154833b1c20f0c282095a56810118c80fff8",
 } as const;
 
-/** On-chain metadata uses Mate Token / MATE (see BaseInputs.sol). */
-export const TOKEN_SYMBOL = "MATE";
+/** On-chain metadata: principalTokenSymbol in BaseInputs.sol (deploy). */
+export const TOKEN_SYMBOL = "JAB";
 
 export const NETWORK_DISPLAY_NAME = "Tempo Moderato";
 
