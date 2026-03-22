@@ -54,7 +54,9 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL (typically `http://localhost:5173`). Production builds and GitHub Pages use the workflow in `apps/digital-health-evvm-frontend/.github/workflows/deploy-pages.yml`.
+Open the printed local URL (typically `http://localhost:5173`). Production builds and GitHub Pages use `.github/workflows/deploy-digital-health-evvm-pages.yml` at the repo root.
+
+**Deploy / registry / verify on Tempo:** see [DEPLOYMENT-TEMPO-LEARNINGS.md §8](DEPLOYMENT-TEMPO-LEARNINGS.md#8-official-cli-redeploy-registry-verification--frontend-sync) (`./evvm deploy`, `./evvm register`, Blockscout verify, sync addresses into the frontend).
 
 ## Use as a CLI Tool (for EVVM deployment)
 

@@ -19,10 +19,10 @@ An **EVVM instance** on a host chain is a coordinated set of contracts. In this 
 | —     | (calls)     | `core.initializeSystemContracts(nameService, treasury)` |
 | 6     | `P2PSwap`   | P2P swap (large contract; last to deploy)         |
 
-**Intentionally skipped** (per project constraints):
+**Previously optional; now supported for Tempo Moderato:**
 
-- **EVVM registry** on Ethereum Sepolia — not used for this testnet until supported.
-- **Block explorer contract verification** — skipped for Tempo where unsupported or out of scope.
+- **EVVM registry (Ethereum Sepolia)** — chain ID **42431** is whitelisted on the registry (`isChainIdRegistered(42431)` returns true). After deploy, run `evvm register --coreAddress <Core> --walletName <account>` (same admin wallet as deploy). See [§8](#8-official-cli-redeploy-registry-verification--frontend-sync).
+- **Block explorer verification** — use **Blockscout** mode in the CLI (or `EVVM_SKIP_EXPLORER_VERIFY=1` to skip). Tempo hosts explorers such as [explore.moderato.tempo.xyz](https://explore.moderato.tempo.xyz) and [explore.testnet.tempo.xyz](https://explore.testnet.tempo.xyz); use the matching **/api/** base for `--verifier-url` if Forge asks.
 
 ---
 
@@ -159,8 +159,8 @@ This is consistent with broader Tempo testnet behavior around how deployment add
    plus gas / block limit / slow flags as documented in `.env.example`.
 7. **If** only P2PSwap is missing:  
    `eval "$(./scripts/print-p2pswap-env.sh)"` then run `DeployP2PSwapOnly` with the same Forge flags.
-8. **Do not** register on the Sepolia EVVM registry for this network until supported.
-9. **Archive** addresses from `run-latest.json` for your app / ops.
+8. **Register** on the Ethereum Sepolia EVVM registry (after deploy): `evvm register --coreAddress <Core from broadcast> --walletName <same as deploy>`. Requires **Sepolia ETH** on that wallet for registry txs. See [§8](#8-official-cli-redeploy-registry-verification--frontend-sync).
+9. **Archive** addresses from `run-latest.json` and sync `apps/digital-health-evvm-frontend/src/config/contracts.ts` (see `scripts/print-deploy-addresses.sh`).
 
 ---
 
@@ -176,6 +176,7 @@ This is consistent with broader Tempo testnet behavior around how deployment add
 | `cli/utils/foundry.ts` | Passes multiplier and `--slow` into Forge |
 | `broadcast/Deploy.s.sol/42431/run-latest.json` | Full deploy receipts (per machine / run) |
 | `apps/digital-health-evvm-frontend/` | Digital Health EVVM demo (Vite + wagmi) |
+| `scripts/print-deploy-addresses.sh` | Print contract names/addresses from a `run-latest.json` |
 
 ---
 
@@ -186,6 +187,90 @@ This is consistent with broader Tempo testnet behavior around how deployment add
 
 ---
 
-## 8. Summary
+## 8. Official CLI: redeploy, registry, verification, frontend sync
+
+Run these **on your machine** in a normal terminal (not headless CI): `cast` needs access to your imported account (`cast wallet import …`).
+
+### 8.1 Prerequisites
+
+- **Foundry**, **Bun**, `./evvm install` (or `bun install` + `forge install`).
+- **Wallet**: `cast wallet import defaultKey --interactive` (or another name; pass `-n` / `--walletName` to commands).
+- **Tempo fee tokens**: fund the deployer on **42431** with PathUSD (or another fee token your wallet uses) for many large txs.
+- **Ethereum Sepolia ETH**: needed on the **same admin address** for **registry** transactions (not for Tempo deploy).
+
+### 8.2 Environment
+
+```bash
+cp .env.example .env
+# Set:
+#   RPC_URL=https://rpc.moderato.tempo.xyz
+# Optional first-time deploy without explorer API:
+#   EVVM_SKIP_EXPLORER_VERIFY=1
+# Optional: skip in-flow registry prompt and register manually after:
+#   EVVM_SKIP_REGISTRY_REGISTRATION=1
+```
+
+If redeploying cleanly, clear stale Foundry state for that chain:
+
+```bash
+rm -rf broadcast/Deploy.s.sol/42431 cache/Deploy.s.sol/42431
+```
+
+### 8.3 Deploy (official TUI or flags)
+
+**Interactive menu:**
+
+```bash
+chmod +x ./evvm
+./evvm
+# → Deploy EVVM Contracts → Single-Chain Deployment
+```
+
+**Non-interactive** (uses `input/BaseInputs.sol`):
+
+```bash
+./evvm deploy --skipInputConfig --walletName defaultKey
+# short: ./evvm deploy -s -n defaultKey
+```
+
+Ensure `RPC_URL` points at Moderato when you run this (see `.env`).
+
+### 8.4 Register in EVVM registry
+
+After deploy, read **Core** from the broadcast file or CLI output, then:
+
+```bash
+./evvm register --coreAddress 0xYourCoreAddress --walletName defaultKey
+```
+
+If the CLI prompts for **custom Ethereum Sepolia RPC**, you can pass `--useCustomEthRpc` and set `EVVM_REGISTRATION_RPC_URL` in `.env` per CLI docs. On success you get an **EVVM ID**; the CLI calls `setEvvmID` on Core on Tempo.
+
+Update the **Digital Health frontend** `EVVM_ID` in `apps/digital-health-evvm-frontend/src/config/contracts.ts` to the new ID (bigint).
+
+### 8.5 Verify on Tempo (Blockscout)
+
+Re-deploy with verification enabled **or** verify in a follow-up Forge run. In the deploy wizard, choose **Blockscout** and set the homepage to your explorer (examples):
+
+- `https://explore.moderato.tempo.xyz`
+- `https://explore.testnet.tempo.xyz`
+
+The CLI passes `--verifier blockscout --verifier-url <homepage>/api/` to Forge. If you have no API key, `EVVM_SKIP_EXPLORER_VERIFY=1` is still valid.
+
+### 8.6 Sync frontend contract addresses
+
+```bash
+chmod +x ./scripts/print-deploy-addresses.sh
+./scripts/print-deploy-addresses.sh
+```
+
+Copy **Core**, **Staking**, **NameService**, **Treasury**, **Estimator**, **P2PSwap** into `apps/digital-health-evvm-frontend/src/config/contracts.ts` (`ADDRESSES`).
+
+### 8.7 Explorer “No transactions” on some contracts
+
+A contract page can look empty if the explorer index lags, or if you opened a **child** contract that only receives **internal** calls. **Deployment** txs appear on the **deployer** address and in `run-latest.json`. Compare **contract address** to `broadcast/…/run-latest.json`; use the explorer URL that matches your RPC (Moderato vs testnet hostname).
+
+---
+
+## 9. Summary
 
 Deploying EVVM on **Tempo Moderato** is workable but **not** “Ethereum defaults”: **gas estimation, serialization of txs, and clearing stale Forge state** matter as much as Solidity. We **succeeded** in getting a **full six-contract** instance recorded in Foundry artifacts and added **recovery tooling** for the heaviest contract. The main **failures** were **under-gassed txs**, **nonce/broadcast drift**, and **shell/env hygiene** — all addressable with the checklist above and the scripts in this repo.

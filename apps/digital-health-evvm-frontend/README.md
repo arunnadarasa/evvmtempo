@@ -34,7 +34,13 @@ npm run preview   # serve dist/
 
 ## Contracts (Tempo Moderato — EVVM Tempo testnet, 42431)
 
-Deployed from this repo’s Foundry stack (`script/Deploy.s.sol`); see root [`DEPLOYMENT-TEMPO-LEARNINGS.md`](../../DEPLOYMENT-TEMPO-LEARNINGS.md). EVVM ID **0** (signing) until registered on the Ethereum Sepolia EVVM registry. On-chain principal token metadata uses **MATE** (placeholder principal address `0x000…0001` in Core metadata).
+Addresses below must match your latest **`broadcast/Deploy.s.sol/42431/run-latest.json`** after deploy. Refresh them with `./scripts/print-deploy-addresses.sh` from the repo root, then paste into `src/config/contracts.ts`.
+
+Deploy, **EVVM registry** registration (Ethereum Sepolia), Blockscout **verification**, and syncing **`EVVM_ID`** are documented in root [`DEPLOYMENT-TEMPO-LEARNINGS.md` §8](../../DEPLOYMENT-TEMPO-LEARNINGS.md#8-official-cli-redeploy-registry-verification--frontend-sync).
+
+**EVVM ID:** set in `src/config/contracts.ts` — use **0** until you run `./evvm register …`; then use the ID returned by the registry.
+
+On-chain principal token metadata uses **MATE** (placeholder principal address `0x000…0001` in Core metadata).
 
 - Core (Evvm): `0xd43072d851e15cd96d54374b95f2c5ea91ff959c`
 - Staking: `0xd75d635b61925574e4d43f82daffd002a37b3197`
