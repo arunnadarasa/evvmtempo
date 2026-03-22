@@ -127,11 +127,12 @@ export async function deploySingle(args: string[], options: any) {
     chainId
   );
 
-  // Tempo Moderato (42431) uses much higher intrinsic gas for contract creation than
-  // Ethereum; Foundry's default ~1.3x estimate can produce txs the RPC rejects with
-  // "intrinsic gas too low" unless we raise the multiplier.
+  // Tempo Moderato (42431): big CREATEs need a high gas-estimate multiplier (percent),
+  // but too high a value can set per-tx gas above the chain cap (~30M) and the RPC
+  // returns -32003 "gas limit too high". 600 (6×) balances P2PSwap intrinsic needs with
+  // Core-sized contracts staying under the cap. Override with EVVM_GAS_ESTIMATE_MULTIPLIER.
   if (chainId === 42431 && !process.env.EVVM_GAS_ESTIMATE_MULTIPLIER) {
-    process.env.EVVM_GAS_ESTIMATE_MULTIPLIER = "400";
+    process.env.EVVM_GAS_ESTIMATE_MULTIPLIER = "600";
   }
 
   // Serialize broadcasts (wait for each tx before the next). Reduces nonce / replacement

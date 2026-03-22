@@ -52,9 +52,9 @@ PY
   echo ""
   echo "Then deploy P2PSwap (from repo root), e.g.:"
   echo "  export RPC_URL=https://rpc.moderato.tempo.xyz"
-  echo "  export EVVM_GAS_ESTIMATE_MULTIPLIER=800"
+  echo "  export EVVM_GAS_ESTIMATE_MULTIPLIER=700"
   echo "  forge script script/DeployP2PSwapOnly.s.sol:DeployP2PSwapOnlyScript \\"
   echo "    --via-ir --optimize true --rpc-url \"\$RPC_URL\" --account defaultKey --broadcast -vvvv \\"
-  echo "    --gas-estimate-multiplier \"\${EVVM_GAS_ESTIMATE_MULTIPLIER:-800}\" \\"
+  echo "    --gas-estimate-multiplier \"\${EVVM_GAS_ESTIMATE_MULTIPLIER:-700}\" \\"
   echo "    --block-gas-limit \"\${EVVM_BLOCK_GAS_LIMIT:-30000000}\" --slow"
 } >&2

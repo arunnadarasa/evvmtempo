@@ -3,6 +3,14 @@
 # Get the directory where the script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Prefer the TypeScript CLI when Bun is available so behavior matches this checkout.
+# Prebuilt binaries in .executables/ can lag behind git and omit chain-specific fixes
+# (e.g. Tempo Moderato gas multiplier defaults). To force the native binary instead:
+#   EVVM_USE_NATIVE_CLI=1 ./evvm ...
+if [[ "${EVVM_USE_NATIVE_CLI:-}" != "1" ]] && command -v bun >/dev/null 2>&1 && [[ -f "$SCRIPT_DIR/cli/index.ts" ]]; then
+  exec bun run "$SCRIPT_DIR/cli/index.ts" "$@"
+fi
+
 # Detect OS and architecture
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -39,6 +47,11 @@ else
   exit 1
 fi
 
+# Some git checkouts store prebuilt binaries without +x (especially macOS).
+if [[ -f "$EXECUTABLE" && ! -x "$EXECUTABLE" ]]; then
+  chmod +x "$EXECUTABLE" 2>/dev/null || true
+fi
+
 # Execute the binary
 if [[ -x "$EXECUTABLE" ]]; then
   # run and capture exit status so we can handle common failure cases
@@ -52,8 +65,7 @@ if [[ -x "$EXECUTABLE" ]]; then
       # try a fallback to Bun if available
       if command -v bun >/dev/null 2>&1; then
         echo "Attempting to run the CLI via Bun fallback..."
-        bun run cli/index.ts "$@"
-        exit $?
+        cd "$SCRIPT_DIR" && exec bun run cli/index.ts "$@"
       else
         echo "bun is not installed. Install Bun or rebuild the binaries on the correct OS." >&2
       fi
@@ -61,8 +73,16 @@ if [[ -x "$EXECUTABLE" ]]; then
     exit $status
   fi
 else
-  echo "Executable not found or not executable: $EXECUTABLE"
-  echo "Please ensure the executable exists and has execute permissions."
-  echo "Try: chmod +x $EXECUTABLE"
+  if [[ -f "$EXECUTABLE" ]]; then
+    echo "Executable not runnable: $EXECUTABLE"
+    echo "Try: chmod +x $EXECUTABLE"
+  else
+    echo "Executable not found: $EXECUTABLE"
+  fi
+  if command -v bun >/dev/null 2>&1; then
+    echo "Running CLI via Bun fallback (bun run cli/index.ts)..."
+    exec bun run "$SCRIPT_DIR/cli/index.ts" "$@"
+  fi
+  echo "Install Bun (https://bun.sh) or place a working binary in .executables/." >&2
   exit 1
 fi

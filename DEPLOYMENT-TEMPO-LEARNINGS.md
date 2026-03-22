@@ -67,7 +67,7 @@ Always re-read your **own** `run-latest.json` if you redeploy.
 
 To reduce foot-guns, the EVVM CLI deployment path was adjusted so that on **42431**:
 
-- If `EVVM_GAS_ESTIMATE_MULTIPLIER` is unset, it defaults to **400** (users often need **800–1000** for the largest creates).
+- If `EVVM_GAS_ESTIMATE_MULTIPLIER` is unset, it defaults to **600** (balances **intrinsic gas too low** vs RPC **-32003 gas limit too high** when per-tx gas must stay under ~**30M**).
 - `EVVM_BROADCAST_SLOW` defaults to **1** so Forge uses **`--slow`** unless explicitly disabled — helps with nonce ordering on congested or quirky RPCs.
 
 See: `cli/commands/deploy/deploySingle.ts`, `cli/utils/foundry.ts`.
@@ -81,6 +81,12 @@ When the **last** contract in the full script failed (historically `P2PSwap` due
 
 This avoids redeploying the entire stack when Core + Staking already exist.
 
+### 3.3b Finish wiring after `NameService` (init calls + `Treasury` + `P2PSwap`)
+
+When the monolithic `Deploy.s.sol` fails **after** `NameService` (often on the first `initializeSystemContracts` call due to §4.6), use:
+
+- `script/DeployFinalize.s.sol` — completes `staking.initializeSystemContracts`, deploys `Treasury`, `core.initializeSystemContracts`, and `new P2PSwap`, with addresses supplied via `EVVM_FINALIZE_*` env vars (see §4.6).
+
 ### 3.4 Documentation in `.env.example`
 
 Environment patterns were documented: RPC URL, skip flags, gas multiplier, block gas limit, slow broadcast, clearing stale `broadcast/` / `cache/`, and paste-safe `export` syntax for zsh (avoid comments on the same line as `export`).
@@ -93,7 +99,7 @@ Environment patterns were documented: RPC URL, skip flags, gas multiplier, block
 
 - **Symptom:** Forge or RPC rejects the tx before/without meaningful execution.
 - **Cause:** Gas limit attached to the transaction too low vs Tempo’s high intrinsic / creation costs.
-- **Fix:** Raise `EVVM_GAS_ESTIMATE_MULTIPLIER` (often **800**, sometimes **1000**). Use `--block-gas-limit 30000000` in line with the network cap. Retry after a clean simulation.
+- **Fix (intrinsic too low):** Raise `EVVM_GAS_ESTIMATE_MULTIPLIER` (e.g. **650–700**). **Fix (-32003 gas limit too high):** Lower multiplier (try **600** default) so no single `CREATE` serializes gas above the chain’s per-tx cap. Use `--block-gas-limit 30000000`. Retry after a clean `broadcast/` + `cache/`.
 
 ### 4.2 `nonce too low` / `replacement transaction underpriced`
 
@@ -116,18 +122,32 @@ Environment patterns were documented: RPC URL, skip flags, gas multiplier, block
 | `export FOO=800 # or 1000` copied literally | zsh may parse `or` / `1000` as bad `export` syntax | One variable per line; separate comment lines |
 | Placeholder addresses in `.env` | `vm.envAddress` / script parsing fails | Use full **42-character** `0x` + 40 hex digits |
 | Printing helper output without `eval` | Variables not set in current shell | `eval "$(./scripts/print-p2pswap-env.sh)"` |
+| Angle brackets in docs (`<tx_hash>`, `<your-solc-version>`) pasted into zsh | `<` is **input redirection** → `parse error near '\n'` | Type the **real** hash or value; **never** paste the `<` `>` characters |
+| Trailing **space after `\`** on a continued line | Line continuation breaks; odd parse errors | Only a newline may follow `\` at end of line |
+| `cast receipt <0xabc...>` | Same redirection issue | `cast receipt 0xabc...` with **no** brackets |
 
 ### 4.5 Stricter address parsing in `DeployP2PSwapOnly`
 
 `DeployP2PSwapOnly.s.sol` uses explicit validation so opaque Forge errors become actionable (length, `0x` prefix, no placeholder strings).
 
-### 4.6 Foundry JSON vs reality (P2PSwap-only run)
+### 4.6 `Transaction Failure` on `staking.initializeSystemContracts` (CALL, not `CREATE`)
+
+- **Symptom:** Forge reports `Transaction Failure` right after `NameService` deploy; `run-latest.json` shows a **hash** for `Staking` `initializeSystemContracts`, but **no receipt success** (or `cast receipt` shows `status 0` and `gasUsed == gasLimit`).
+- **Runtime check (example):** `cast estimate` for the same `to` + calldata returned **~1,043,311** gas on Moderato RPC, while the broadcast tx used **708,378** gas — **out of gas** on a simple-looking `CALL`.
+- **Why:** A single global `--gas-estimate-multiplier` is tuned so large **`CREATE`s stay under ~30M** (§4.1). Forge’s simulated base gas for some **`CALL`s can be far below** what `eth_estimateGas` on Tempo returns, so **6× the wrong base** still undershoots (~708k vs ~1.04M needed).
+- **`DeployFinalize.s.sol` caveat:** Forge may still broadcast **under-gassed** `CALL`s in the same batch as successful `CREATE`s (e.g. Staking init fails at ~708k, Treasury + P2PSwap succeed). **Finish with `cast send`** for each `initializeSystemContracts` using **`--gas-limit 2000000`** (or above `cast estimate`), in order: **Staking first**, then **Core** (with the **on-chain** Treasury address from the successful `DeployFinalize` tx, not placeholder rows in an old `Deploy.s.sol` artifact).
+- **Fix paths:**
+  1. **Resume script:** `script/DeployFinalize.s.sol` — runs `initializeSystemContracts` → `Treasury` → `core.initializeSystemContracts` → `P2PSwap` using addresses from env (`EVVM_FINALIZE_STAKING`, `EVVM_FINALIZE_CORE`, `EVVM_FINALIZE_ESTIMATOR`, `EVVM_FINALIZE_NAME_SERVICE`). Run with the same `forge script` / CLI flags as a normal deploy; a smaller script often gets a better aggregate gas estimate.
+  2. **Manual `cast send`:** For the failing step only, send with an explicit **`--gas-limit`** above RPC `cast estimate` (e.g. **2,000,000**), then continue with `DeployFinalize` or further `cast send` / `forge script` for remaining steps.
+  3. **Do not** only raise `EVVM_GAS_ESTIMATE_MULTIPLIER` to ~900+ without checking §4.1 — **Core-sized `CREATE`s can exceed 30M** at high multipliers.
+
+### 4.7 Foundry JSON vs reality (P2PSwap-only run)
 
 In at least one `DeployP2PSwapOnly` broadcast, metadata showed a **`contractAddress` that matched the Staking address passed as a constructor argument** — which would be impossible if Staking already held code at that address (a second `CREATE` cannot occupy the same address). **Treat console logs and on-chain checks as ground truth:** `cast code <address>`, receipt from a block explorer, or the **full** `Deploy.s.sol` artifact where P2PSwap has its own distinct address.
 
 **Practical rule:** Prefer the **full deploy** `run-latest.json` for the six-contract instance; double-check any standalone P2PSwap tx against chain state.
 
-### 4.7 Public RPC: `eth_call` / `eth_getCode` vs successful txs to Core (dapps)
+### 4.8 Public RPC: `eth_call` / `eth_getCode` vs successful txs to Core (dapps)
 
 On **Tempo Moderato**, the public RPC (`https://rpc.moderato.tempo.xyz`) may return **empty `eth_getCode`** and **empty `eth_call` return data** for a deployed **Core** address, while **transactions** to the same address (for example `addBalance`) **succeed** and appear correctly on the explorer.
 
@@ -145,13 +165,28 @@ This is consistent with broader Tempo testnet behavior around how deployment add
 - Re-verify **Core** and other contract addresses against your own `broadcast/…/run-latest.json` and on-chain explorers before relying on static calls.
 - A **Digital Health EVVM** demo UI ships in this repo under **`apps/digital-health-evvm-frontend/`** (see root `README.md`).
 
+### 4.9 Contract verification: Tempo explorer UI vs `forge verify`
+
+- **`explore.testnet.tempo.xyz` / `explore.moderato.tempo.xyz`** are **Tempo’s explorer apps**. Hitting `https://…/api/` from `curl` or Forge’s **`--verifier blockscout --verifier-url …/api/`** often returns **HTML** or errors like **`Only HTML requests are supported here`** — there is **no** classic Blockscout JSON API on that path for Foundry to use.
+- **Sourcify** works with Foundry for chain **42431**: submit with **`--verifier sourcify --verifier-url https://sourcify.dev/server`**, plus matching compile flags (**`--via-ir`**, **`--num-of-optimizations 300`** per `foundry.toml`), and constructor args (e.g. **`--guess-constructor-args`** + **`--creation-transaction-hash <Core deploy tx hash>`** from `broadcast/Deploy.s.sol/42431/run-latest.json`). Example one-liner (no angle-bracket placeholders):
+
+```bash
+forge verify-contract 0xYourCoreAddress src/contracts/core/Core.sol:Core \
+  --chain 42431 --verifier sourcify --verifier-url https://sourcify.dev/server \
+  --guess-constructor-args --creation-transaction-hash 0xYourCoreCreationTxHash \
+  --num-of-optimizations 300 --via-ir --etherscan-api-key noop \
+  --rpc-url https://rpc.moderato.tempo.xyz
+```
+
+- **Explorer “No ABI”** means **not verified in that UI**. Sourcify verification can still succeed; the Tempo explorer may or may not ingest Sourcify metadata — if ABI stays empty, use the explorer’s **in-app verify** flow if available, or rely on Sourcify / local ABI from `out/`.
+
 ---
 
 ## 5. Operational checklist (Moderato)
 
 1. **Fund** the deployer with enough **fee token** (PathUSD-style) for many large txs.
 2. **Set** `RPC_URL=https://rpc.moderato.tempo.xyz` (or your provider).
-3. **Set** `EVVM_GAS_ESTIMATE_MULTIPLIER` to **800** (or **1000** if needed).
+3. **Set** `EVVM_GAS_ESTIMATE_MULTIPLIER` to **600** by default; increase only if intrinsic errors persist, decrease if you hit **gas limit too high**.
 4. **Set** `EVVM_BLOCK_GAS_LIMIT=30000000` if your tooling respects it.
 5. **Enable slow broadcast** (`EVVM_BROADCAST_SLOW=1` or CLI default on 42431).
 6. **Full deploy:**  
@@ -247,14 +282,14 @@ If the CLI prompts for **custom Ethereum Sepolia RPC**, you can pass `--useCusto
 
 Update the **Digital Health frontend** `EVVM_ID` in `apps/digital-health-evvm-frontend/src/config/contracts.ts` to the new ID (bigint).
 
-### 8.5 Verify on Tempo (Blockscout)
+### 8.5 Verify on Tempo (CLI Blockscout vs Sourcify)
 
-Re-deploy with verification enabled **or** verify in a follow-up Forge run. In the deploy wizard, choose **Blockscout** and set the homepage to your explorer (examples):
+Re-deploy with verification enabled **or** verify in a follow-up Forge run. In the deploy wizard, **Blockscout** with homepage:
 
 - `https://explore.moderato.tempo.xyz`
 - `https://explore.testnet.tempo.xyz`
 
-The CLI passes `--verifier blockscout --verifier-url <homepage>/api/` to Forge. If you have no API key, `EVVM_SKIP_EXPLORER_VERIFY=1` is still valid.
+maps to `--verifier blockscout --verifier-url <homepage>/api/`. **In practice** that API URL often **does not** speak Foundry’s expected JSON API (see **§4.9**). If verification fails with HTML / deserialize errors, use **`EVVM_SKIP_EXPLORER_VERIFY=1`** for deploy, then verify **Core** (and others) via **Sourcify** as in **§4.9**. If you have no API key, `EVVM_SKIP_EXPLORER_VERIFY=1` is still valid.
 
 ### 8.6 Sync frontend contract addresses
 
