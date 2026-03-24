@@ -306,6 +306,56 @@ A contract page can look empty if the explorer index lags, or if you opened a **
 
 ---
 
-## 9. Summary
+## 9. Digital Health EVVM frontend (Vite + wagmi + Tempo)
 
-Deploying EVVM on **Tempo Moderato** is workable but **not** “Ethereum defaults”: **gas estimation, serialization of txs, and clearing stale Forge state** matter as much as Solidity. We **succeeded** in getting a **full six-contract** instance recorded in Foundry artifacts and added **recovery tooling** for the heaviest contract. The main **failures** were **under-gassed txs**, **nonce/broadcast drift**, and **shell/env hygiene** — all addressable with the checklist above and the scripts in this repo.
+The demo app under `apps/digital-health-evvm-frontend` targets **two** Tempo chains in one wagmi `createConfig`: **Moderato (42431)** and **Tempo Mainnet (4217)**. This section records what we validated in the browser and why the code is shaped this way.
+
+### 9.1 Do not auto-switch the wallet to Moderato only
+
+An effect that always calls `switchChainAsync({ chainId: 42431 })` whenever the wallet is “wrong” **fights** flows that intentionally use **4217** (e.g. Parallel / mainnet MPP). Symptom from `@wagmi/core`: *“The current chain of the connector (id: 42431) does not match the connection's chain (id: 4217).”* **Fix:** remove global auto-switch; let the user pick the chain (header network `<select>` + per-action `switchChain` where needed).
+
+### 9.2 `feeToken` must match what you display and what pays gas
+
+Tempo uses **fee tokens** (TIP-style stablecoins), not native ETH, for transaction fees. In wagmi/viem, extend each chain with `feeToken`:
+
+| Chain | Chain ID | Fee token in this repo | Notes |
+|-------|----------|-------------------------|--------|
+| Tempo Moderato (testnet) | **42431** | **PathUSD** — `viem/tempo` `Addresses.pathUsd` | Same as public Moderato faucet bundle (PathUSD / Alpha / Beta / Theta, 6 decimals). |
+| Tempo Mainnet | **4217** | **USDC** — `0x20C000000000000000000000b9537d11c60E8b50` (6 decimals) | Configured in `apps/digital-health-evvm-frontend/src/config/tempoStablecoins.ts` as `TEMPO_MAINNET_USDC` and passed to `tempo.extend({ feeToken })` in `config/wagmi.tsx`. |
+
+If `feeToken` and the user’s actual fee asset diverge, `prepareTransactionRequest` / wallet sends can fail or behave inconsistently.
+
+### 9.3 Header: show the **fee** balance, chain-scoped
+
+- **Moderato:** read ERC-20 `balanceOf` for **PathUSD** (enabled only when `chainId === 42431`).
+- **Mainnet:** read `balanceOf` for **USDC** at the address above (enabled only when `chainId === 4217`).
+- Use **separate** `useReadContract` calls with `query.enabled` tied to the active chain so RPC reads are not mismatched.
+
+Large balances must not go through `Number` / `parseFloat` (scientific notation). Use a string-based formatter (e.g. `formatDisplayAmount` + `formatUnits` from viem).
+
+### 9.4 `sendCallsSync` / MPP: longer client wait + `push` mode
+
+- viem’s default `sendCallsSync` timeout scales with **`chain.blockTime`**. Tempo blocks are fast; the default wait can be **too short** for wallets to land a bundle → *“Timed out while waiting for call bundle”*. **Mitigation:** extend the chain with a larger `blockTime` (e.g. **30_000** ms) so the **client** waits longer (this does not change real block time).
+- **`mppx` `tempo({ mode: "push" })`:** `pull` relies on **`eth_signTransaction`**, which many injected wallets **do not support**. **Push** uses `wallet_sendCalls` + `sendCallsSync`, which matches MetaMask-style behavior.
+
+### 9.5 EVVM **principal** balance vs **fee** token
+
+**Core** `getBalance` (principal ledger, 18 decimals in the demo) is **not** the same asset as PathUSD/USDC used for gas. The UI should keep **fee token** balances (header) and **principal** balances (EVVM Core section) clearly separate.
+
+### 9.6 Explorers per chain
+
+Use the explorer that matches the connected chain (from `viem/chains` / Tempo definitions), e.g. Moderato vs `explore.tempo.xyz` for mainnet — see header wallet link construction in `Header.tsx`.
+
+### 9.7 Reference paths
+
+- Wagmi + chains: `apps/digital-health-evvm-frontend/src/config/wagmi.tsx`
+- Addresses + `CHAIN_ID` (EVVM deploy): `apps/digital-health-evvm-frontend/src/config/contracts.ts`
+- Fee token constants: `apps/digital-health-evvm-frontend/src/config/tempoStablecoins.ts`
+- Header network + balances: `apps/digital-health-evvm-frontend/src/components/Header.tsx`
+- MPP client: `apps/digital-health-evvm-frontend/src/lib/mppxTempo.ts`
+
+---
+
+## 10. Summary
+
+Deploying EVVM on **Tempo Moderato** is workable but **not** “Ethereum defaults”: **gas estimation, serialization of txs, and clearing stale Forge state** matter as much as Solidity. We **succeeded** in getting a **full six-contract** instance recorded in Foundry artifacts and added **recovery tooling** for the heaviest contract. The main **failures** were **under-gassed txs**, **nonce/broadcast drift**, and **shell/env hygiene** — all addressable with the checklist above and the scripts in this repo. The **Digital Health EVVM** frontend (§9) layers **wagmi** dual-chain setup, **fee-token** choice per chain (PathUSD vs USDC), header network switching, and **MPP / `sendCallsSync`** timing on top of those deploy lessons.

@@ -2,6 +2,9 @@ export type ActivityKind =
   | "dhm_faucet"
   | "dhm_mpp"
   | "usdc_mpp"
+  | "mri_evvm_settlement"
+  | "mpp_pay_tempo_moderato"
+  | "mpp_pay_tempo_mainnet"
   /** @deprecated stored entries from older builds */
   | "dhm_x402"
   | "usdc_x402";

@@ -170,7 +170,7 @@ export function EVVMSection() {
       <h2>EVVM Core</h2>
       <p>
         View your principal token balance ({TOKEN_SYMBOL}) and EVVM metadata on {NETWORK_DISPLAY_NAME}. On-chain name is
-        shown below when available (deploy metadata may use &quot;Mate Token&quot; / MATE on Tempo).
+        shown below when available (may differ from UI label until metadata is updated on deploy).
       </p>
       {address && (
         <div className="grid-2">

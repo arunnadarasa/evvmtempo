@@ -1,3 +1,12 @@
+import {
+  ADDRESSES,
+  CHAIN_ID,
+  CHAIN_INFRA_NAME,
+  DHM_TOKEN,
+  NETWORK_DISPLAY_NAME,
+  TOKEN_NAME,
+  TOKEN_SYMBOL,
+} from "../../config/contracts";
 import { TEMPO_MODERATO_FEE_TOKENS } from "../../config/tempoStablecoins";
 
 export function ExplainerSection() {
@@ -5,13 +14,16 @@ export function ExplainerSection() {
     <section className="section">
       <h2>How the payments work</h2>
       <p>
-        This section explains EVVM payments on <strong>Tempo Moderato</strong> in simple language so you can focus on
+        This section explains <strong>{TOKEN_NAME}</strong> payments on <strong>{NETWORK_DISPLAY_NAME}</strong> (
+        <strong>{CHAIN_INFRA_NAME}</strong>, chain <strong>{CHAIN_ID}</strong>) in simple language so you can focus on
         building Clinical Agents without deep blockchain expertise.
       </p>
       <div className="tempo-fee-callout">
-        <h3>Tempo Moderato: fee stablecoins (not ETH)</h3>
+        <h3>
+          {CHAIN_INFRA_NAME}: fee stablecoins (not ETH)
+        </h3>
         <p>
-          On chain <strong>42431</strong>, transaction fees are paid in USD stablecoins (<strong>6 decimals</strong>),
+          On chain <strong>{CHAIN_ID}</strong>, transaction fees are paid in USD stablecoins (<strong>6 decimals</strong>),
           not native ETH. The testnet commonly uses four fee tokens; the public faucet often tops up all of them:
         </p>
         <table className="tempo-fee-table">
@@ -22,6 +34,16 @@ export function ExplainerSection() {
             </tr>
           </thead>
           <tbody>
+            <tr>
+              <td>
+                {TOKEN_NAME} (<strong>{TOKEN_SYMBOL}</strong>)
+              </td>
+              <td>
+                Core <code className="mono-addr">{ADDRESSES.evvm}</code>
+                <span className="small"> · principal key </span>
+                <code className="mono-addr">{DHM_TOKEN}</code>
+              </td>
+            </tr>
             {TEMPO_MODERATO_FEE_TOKENS.map((t) => (
               <tr key={t.address}>
                 <td>{t.name}</td>
@@ -42,10 +64,12 @@ export function ExplainerSection() {
       </div>
       <div className="grid-2">
         <div>
-          <h3>1. Paying with MATE via EVVM Core</h3>
+          <h3>
+            1. Paying with {TOKEN_SYMBOL} via EVVM Core
+          </h3>
           <p>
-            The principal token (<strong>MATE</strong>) is tracked inside EVVM Core. You can use the in-app faucet, sign{" "}
-            <code>pay()</code> messages for transfers, and rely on sync/async nonces so each payment is only used once.
+            The principal token (<strong>{TOKEN_NAME}</strong>) is tracked inside EVVM Core. You can use the in-app faucet,
+            sign <code>pay()</code> messages for transfers, and rely on sync/async nonces so each payment is only used once.
           </p>
           <ul>
             <li>
@@ -61,13 +85,17 @@ export function ExplainerSection() {
         <div>
           <h3>2. HTTP paywalls on Tempo (reference)</h3>
           <p>
-            For “pay before content” over HTTP, Tempo ecosystems often use <strong>MPP</strong>-style flows and tools
-            such as <code>mppx</code>; see{" "}
+            For “pay before content” over HTTP, Tempo ecosystems use <strong>MPP</strong> (HTTP 402) and tools such as{" "}
+            <code>mppx</code>; see{" "}
             <a href="https://mpp.dev" target="_blank" rel="noopener noreferrer">
               mpp.dev
+            </a>
+            , Stripe{" "}
+            <a href="https://www.purl.dev/" target="_blank" rel="noopener noreferrer">
+              purl
             </a>{" "}
-            and the DanceTempo reference app for wallet bundles and discovery. This demo focuses on EVVM Core and
-            on-chain MATE; wire HTTP paywalls separately if your agent needs them.
+            for x402-style demos, and the OpenClaw MRI section below for a
+            scripted agent flow. This page still focuses on EVVM Core; complete MPP retries with a Tempo-capable client.
           </p>
         </div>
       </div>
@@ -75,15 +103,15 @@ export function ExplainerSection() {
         <h3>How to think about this as a builder</h3>
         <ul>
           <li>
-            <strong>Lovable / no‑code developers</strong>: treat EVVM like a ledger for agent micropayments — fund MATE
-            via the faucet, then automate signed <code>pay()</code> flows.
+            <strong>Lovable / no‑code developers</strong>: treat EVVM like a ledger for agent micropayments — fund{" "}
+            {TOKEN_SYMBOL} via the faucet, then automate signed <code>pay()</code> flows.
           </li>
           <li>
             <strong>OpenClaw Agents</strong>: plan the payment, request a wallet signature, and submit or relay the
             transaction.
           </li>
           <li>
-            <strong>Clinical teams</strong>: think in terms of agents that receive tiny MATE payments for access or
+            <strong>Clinical teams</strong>: think in terms of agents that receive tiny {TOKEN_SYMBOL} payments for access or
             scheduling — without learning Solidity.
           </li>
         </ul>

@@ -1,5 +1,5 @@
 /**
- * Tempo Moderato (42431) — EVVM Tempo testnet.
+ * EVVM on Tempo Moderato (chain 42431).
  * Matches `input/BaseInputs.sol` + `broadcast/Deploy.s.sol/42431/run-latest.json`.
  */
 export const CHAIN_ID = 42431 as const;
@@ -20,9 +20,16 @@ export const ADDRESSES = {
   p2pSwap: "0xe1ff154833b1c20f0c282095a56810118c80fff8",
 } as const;
 
-/** On-chain metadata: principalTokenSymbol in BaseInputs.sol (deploy). */
-export const TOKEN_SYMBOL = "JAB";
+/** Principal token symbol in UI and signed flows (product: MATE). */
+export const TOKEN_SYMBOL = "MATE";
 
-export const NETWORK_DISPLAY_NAME = "Tempo Moderato";
+/** Full name for prose (“MATE token”). */
+export const TOKEN_NAME = "MATE token";
+
+/** User-facing network label for the EVVM deployment. */
+export const NETWORK_DISPLAY_NAME = "EVVM";
+
+/** Underlying Tempo testnet (chain infra) when technical context is needed. */
+export const CHAIN_INFRA_NAME = "Tempo Moderato";
 
 export const TX_EXPLORER_BASE = "https://explore.moderato.tempo.xyz";

@@ -30,6 +30,9 @@ function formatKind(kind: ActivityEntry["kind"]): string {
   if (kind === "dhm_faucet") return "EVVM faucet";
   if (kind === "dhm_mpp" || kind === "dhm_x402") return "DHM MPP";
   if (kind === "usdc_mpp" || kind === "usdc_x402") return "USDC MPP";
+  if (kind === "mri_evvm_settlement") return "MRI EVVM";
+  if (kind === "mpp_pay_tempo_moderato") return "MPP Tempo testnet";
+  if (kind === "mpp_pay_tempo_mainnet") return "MPP Tempo mainnet";
   return kind;
 }
 

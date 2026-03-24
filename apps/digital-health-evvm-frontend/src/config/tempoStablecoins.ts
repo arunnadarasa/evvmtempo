@@ -15,3 +15,12 @@ export const TEMPO_MODERATO_FEE_TOKENS = [
 ] as const;
 
 export const TEMPO_MODERATO_FEE_DECIMALS = 6 as const;
+
+/**
+ * Tempo **Mainnet** (chain `4217`) — USDC used for fees / `prepareTransactionRequest` in this app.
+ */
+export const TEMPO_MAINNET_USDC = {
+  symbol: "USDC",
+  address: "0x20C000000000000000000000b9537d11c60E8b50" as `0x${string}`,
+  decimals: 6 as const,
+} as const;
