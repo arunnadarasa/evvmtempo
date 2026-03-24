@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
-import { getActivities, ActivityEntry } from "../../lib/activityLog";
-import { TX_EXPLORER_BASE } from "../../config/contracts";
+import { useEffect, useMemo, useState } from "react";
+import { useChainId } from "wagmi";
+import { tempo } from "viem/chains";
+import { getActivities, subscribeActivities, ActivityEntry } from "../../lib/activityLog";
+import { CHAIN_ID, TX_EXPLORER_BASE } from "../../config/contracts";
 
 const PAGE_SIZE = 5;
 
@@ -36,13 +38,37 @@ function formatKind(kind: ActivityEntry["kind"]): string {
   return kind;
 }
 
-function openTransaction(txHash: string) {
-  window.open(`${TX_EXPLORER_BASE}/tx/${txHash}`, "_blank", "noopener,noreferrer");
+function openTransaction(txHash: string, explorerBase: string) {
+  window.open(`${explorerBase}/tx/${txHash}`, "_blank", "noopener,noreferrer");
+}
+
+/** Mainnet MPP entries are `mpp_pay_tempo_mainnet`; everything else in this app is Moderato (EVVM + testnet MPP). */
+function filterActivitiesForChain(entries: ActivityEntry[], chainId: number): ActivityEntry[] {
+  if (chainId === tempo.id) {
+    return entries.filter((e) => e.kind === "mpp_pay_tempo_mainnet");
+  }
+  if (chainId === CHAIN_ID) {
+    return entries.filter((e) => e.kind !== "mpp_pay_tempo_mainnet");
+  }
+  return [];
 }
 
 export function RecentTransactionsSection() {
+  const chainId = useChainId();
+  const [logVersion, setLogVersion] = useState(0);
+
+  useEffect(() => subscribeActivities(() => setLogVersion((v) => v + 1)), []);
+
   const [page, setPage] = useState(0);
-  const activities = useMemo(() => getActivities(), []);
+
+  useEffect(() => {
+    setPage(0);
+  }, [chainId]);
+
+  const activities = useMemo(
+    () => filterActivitiesForChain(getActivities(), chainId),
+    [chainId, logVersion]
+  );
 
   const totalPages = Math.max(1, Math.ceil(activities.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
@@ -52,18 +78,29 @@ export function RecentTransactionsSection() {
   const handlePrev = () => setPage((p) => Math.max(0, p - 1));
   const handleNext = () => setPage((p) => Math.min(totalPages - 1, p + 1));
 
+  const chainHint =
+    chainId === tempo.id
+      ? "Showing Tempo Mainnet activity only (Parallel / mainnet MPP)."
+      : chainId === CHAIN_ID
+        ? "Showing Tempo Moderato activity only (EVVM faucet, MRI settlement, Moderato MPP)."
+        : "Switch to Tempo Moderato or Tempo Mainnet in the header to see activity for that network.";
+
   return (
     <section className="section">
       <h2>Recent activity</h2>
       <p className="activity-intro">
-        Recent EVVM faucet requests and MPP payment attempts (DHM / USDC demos). Stored locally in your browser — not
-        from the blockchain.
+        Recent EVVM faucet requests and MPP payment attempts. Stored locally in your browser — not from the blockchain.{" "}
+        <strong>{chainHint}</strong>
       </p>
       {current.length === 0 ? (
         <div className="activity-empty">
-          <p>No activity yet.</p>
+          <p>No activity for this network yet.</p>
           <p className="small">
-            Use the EVVM faucet, complete an MPP DHM paywall payment, or an Echo USDC flow to see entries here.
+            {chainId === tempo.id
+              ? "Use Pay mainnet / Parallel flows in OpenClaw MRI to log mainnet entries."
+              : chainId === CHAIN_ID
+                ? "Use the EVVM faucet, MRI EVVM pay, or Moderato MPP ping to log Moderato entries."
+                : "Select Tempo Moderato or Tempo Mainnet in the wallet header."}
           </p>
         </div>
       ) : (
@@ -82,7 +119,9 @@ export function RecentTransactionsSection() {
                     <button
                       type="button"
                       className="btn btn-open-tx"
-                      onClick={() => openTransaction(a.txHash!)}
+                      onClick={() =>
+                        openTransaction(a.txHash!, a.kind === "mpp_pay_tempo_mainnet" ? tempo.blockExplorers.default.url : TX_EXPLORER_BASE)
+                      }
                       title="Open transaction on explorer"
                     >
                       View transaction

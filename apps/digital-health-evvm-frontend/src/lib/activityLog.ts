@@ -44,6 +44,20 @@ function saveAll(entries: ActivityEntry[]) {
   }
 }
 
+const activityListeners = new Set<() => void>();
+
+/** Same-tab refresh for UI that reads the log (localStorage does not fire `storage` in the writing tab). */
+export function subscribeActivities(onChange: () => void) {
+  activityListeners.add(onChange);
+  return () => {
+    activityListeners.delete(onChange);
+  };
+}
+
+function notifyActivityListeners() {
+  activityListeners.forEach((fn) => fn());
+}
+
 export function addActivity(entry: Omit<ActivityEntry, "id" | "timestamp">) {
   const all = loadAll();
   const now = Date.now();
@@ -51,6 +65,7 @@ export function addActivity(entry: Omit<ActivityEntry, "id" | "timestamp">) {
   const full: ActivityEntry = { id, timestamp: now, ...entry };
   const next = [full, ...all];
   saveAll(next);
+  notifyActivityListeners();
 }
 
 export function getActivities(): ActivityEntry[] {
